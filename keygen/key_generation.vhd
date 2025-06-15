@@ -95,10 +95,23 @@ architecture RTL of key_generation is
 	signal bram_g_write_b    : std_logic;
 	signal bram_g_data_in_b  : std_logic_vector(2 - 1 downto 0);
 	signal bram_g_data_out_b : std_logic_vector(2 - 1 downto 0);
+	function slv_to_string(vec: std_logic_vector) return string is
+    variable result : string(1 to vec'length);
+begin
+    for i in vec'range loop
+        if vec(i) = '0' then
+            result(result'length - (vec'length - 1 - i)) := '0';
+        else
+            result(result'length - (vec'length - 1 - i)) := '1';
+        end if;
+    end loop;
+    return result;
+end function;
 
 begin
 	fsm_process : process(clock, reset) is
 	begin
+		--report slv_to_string(random_small_poly);
 		if reset = '1' then
 			state_key_gen <= init_state;
 
@@ -130,6 +143,7 @@ begin
 					random_small_enable_out <= '1';
 					r3_recip_start          <= '0';
 				when gen_g_done =>
+				report "Starting inv_g-----------------";
 					state_key_gen           <= inv_g;
 					random_small_enable_out <= '0';
 					random_small_counter    <= 0;
@@ -140,9 +154,13 @@ begin
 					if r3_recip_done = '0' then
 						state_key_gen <= wait_inv_g;
 					else
+						report "Done inv_g------------------";
 						if r3_recip_is_invertable = '1' then
+							
+							report "g is invertible";
 							state_key_gen <= inv_f;
 						else
+							report "g is not invertible";
 							state_key_gen <= check_inv_g;
 						end if;
 					end if;
