@@ -187,19 +187,20 @@ begin
 					bram_g_write_b_reset <= (others => '0');
 					bram_v_write_b_reset <= (others => '0');
 					bram_r_write_b_reset <= (others => '0');
-				when reset_ram =>
+				when reset_ram =>  ---still saves one coefficient at a time but in banked logic
 					extra := b + 1 - (p+1) mod (b+1);
+					---added a reset since this time it's not the same bram being written to every iteration, but every b + 1 times
 					bram_f_write_b_reset <= (others => '0');
 					bram_g_write_b_reset <= (others => '0');
 					bram_v_write_b_reset <= (others => '0');
 					bram_r_write_b_reset <= (others => '0');
 					
-				    bram_f_address_b_reset(counter_fg mod (b+1)) <= std_logic_vector(to_unsigned(counter_fg/(b+1), bram_address_width));
-					bram_g_address_b_reset((p - 1 - counter_fg) mod (b+1)) <= std_logic_vector(to_signed((p - 1 - counter_fg)/(b+1), bram_address_width + 1)(bram_address_width - 1 downto 0));
+				    bram_f_address_b_reset(counter_fg mod (b+1)) <= std_logic_vector(to_unsigned(integer(counter_fg/(b+1)), bram_address_width));
+					bram_g_address_b_reset((p - 1 - counter_fg) mod (b+1)) <= std_logic_vector(to_signed(integer((p - 1 - counter_fg)/(b+1)), bram_address_width + 1)(bram_address_width - 1 downto 0));
 
 					
-					bram_v_address_b_reset(counter_vr mod (b+1)) <= std_logic_vector(to_unsigned(counter_vr/(b+1), bram_address_width));
-					bram_r_address_b_reset(counter_vr mod (b+1)) <= std_logic_vector(to_unsigned(counter_vr/(b+1), bram_address_width));
+					bram_v_address_b_reset(counter_vr mod (b+1)) <= std_logic_vector(to_unsigned(integer(counter_vr/(b+1)), bram_address_width));
+					bram_r_address_b_reset(counter_vr mod (b+1)) <= std_logic_vector(to_unsigned(integer(counter_vr/(b+1)), bram_address_width));
 
 					if counter_fg = 0 then	 
 						bram_f_data_in_b_reset(counter_fg mod (b+1)) <= std_logic_vector(to_signed(1, 2));
@@ -214,7 +215,7 @@ begin
 			
 					else
 						bram_g_data_in_b_reset(p mod (b+1)) <= (others => '0');
-						bram_g_address_b_reset(p mod (b+1)) <= std_logic_vector(to_unsigned(p/(b+1), bram_address_width));
+						bram_g_address_b_reset(p mod (b+1)) <= std_logic_vector(to_unsigned(integer(p/(b+1)), bram_address_width));
 					
 					end if;
 
@@ -266,7 +267,7 @@ begin
 							bram_r_write_b_reset            <=  (others => '0');
 
 				when running_state =>
-					report "counter " & integer'image(counter);
+				
 	
 					if counter >= loop_limit then
 						state_r3_reciprocal <= calc_reciprocal_init;
@@ -294,25 +295,14 @@ begin
 				when swap_state_2 =>
 
 
-					-- Latch swap_mask first, before delta update or swap_mask_s update
+					---it's always the first value of g so in the first bank
 					swap_mask := negative_mask(-delta) AND non_zero_mask(signed(bram_g_data_out_a(0)));
 
-report "SWAP_STATE: Reading G[Block=0] Value=" & integer'image(to_integer(signed(bram_g_data_out_a(0)))) &
-       " Delta=" & integer'image(to_integer(delta)) severity note;
 
-
-					-- Move to next state
 					state_r3_reciprocal <= swap_state_3;
 
-					-- Now print out all intermediate steps:
-					
-					-- Now perform the delta update
 					delta := (delta XOR (swap_mask AND (delta XOR -delta))) + to_signed(1, 16);
 
-					-- Report new delta value
-report "DELTA UPDATE: New delta=" & integer'image(to_integer(delta));
-
-					-- Finally, update swap_mask_s
 					 if swap_mask(0) = '1' then
 						swap_mask_s <= not swap_mask_s;
 					else
@@ -323,65 +313,37 @@ report "DELTA UPDATE: New delta=" & integer'image(to_integer(delta));
 
 
 				when swap_state_3 =>
-
+					---it's always the first value of g and f so in the first bank
 					state_r3_reciprocal <= multiply_state_read;
 					f_zero              <= bram_f_data_out_a(0);
 					g_zero              <= bram_g_data_out_a(0);
 				when multiply_state_read =>	
-				if counter_vr = 0 then
-					report "f0 "  & integer'image(to_integer(signed(bram_f_data_out_a(0))));
-					report "g0 "  & integer'image(to_integer(signed(bram_g_data_out_a(0))));
-					end if;
-				if counter_vr < 12 then
-				report "counter " & integer'image(counter) & " and counter_fg "  & integer'image(counter_fg) ;
 
-				end if;
-				if counter = 1 and counter_fg < 3  then
-  report "======================= PARALLEL STEP " & integer'image(counter_vr) & " =======================" severity note;
-for i in 0 to b loop
-    report "F[" & integer'image(i) & "] addr " & integer'image(to_integer(unsigned(bram_f_address_a(i)))) &
-           " = " & integer'image(to_integer(signed(bram_f_data_out_a(i)))) severity note;
-    report "G[" & integer'image(i) & "] addr " & integer'image(to_integer(unsigned(bram_g_address_a(i)))) &
-           " = " & integer'image(to_integer(signed(bram_g_data_out_a(i)))) severity note;
-    report "V[" & integer'image(i) & "] addr " & integer'image(to_integer(unsigned(bram_v_address_a(i)))) &
-           " = " & integer'image(to_integer(signed(bram_v_data_out_a(i)))) severity note;
-    report "R[" & integer'image(i) & "] addr " & integer'image(to_integer(unsigned(bram_r_address_a(i)))) &
-           " = " & integer'image(to_integer(signed(bram_r_data_out_a(i)))) severity note;
+					-- calculation to deal with the last iteration if the batching has a "remainder"
+					if counter_fg + (b+1) > p + 1 then
+										extra := (p+1) mod (b+1);				
+						else
+							extra := b + 1;
+						end if;
 
-    report "WRITE F[" & integer'image(i) & "] = " & integer'image(to_integer(signed(bram_f_data_in_b(i)))) severity note;
-    report "WRITE G[" & integer'image(i) & "] = " & integer'image(to_integer(signed(bram_g_data_in_b(i)))) severity note;
-
-    report "fg_freeze[" & integer'image(i) & "] = " & integer'image(to_integer(signed(fg_freeze(i)))) severity note;
-    report "vr_freeze[" & integer'image(i) & "] = " & integer'image(to_integer(signed(vr_freeze(i)))) severity note;
-end loop;
-
-end if;
-
-
-			if counter_fg + (b+1) > p + 1 then
-							extra := (p+1) mod (b+1);				
-			else
-				extra := b + 1;
-			end if;
-
-				
+					
 					for i in 0 to extra - 1 loop
-
-					    bram_f_address_a((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned((counter_fg+i)/ (b+1), bram_address_width));
-						bram_g_address_a((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned((counter_fg+i) / (b+1), bram_address_width));
 						
-						bram_v_address_a((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned((counter_vr+i) / (b+1), bram_address_width));
-						bram_r_address_a((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned((counter_vr+i) / (b+1), bram_address_width));
+					    bram_f_address_a((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_fg+i)/ (b+1)), bram_address_width));
+						bram_g_address_a((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_fg+i)/ (b+1)), bram_address_width));
+						
+						bram_v_address_a((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/ (b+1)), bram_address_width));
+						bram_r_address_a((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/ (b+1)), bram_address_width));
 										
 
-						bram_g_address_b_delay(0)((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned((counter_fg+i)/ (b+1), bram_address_width));
+						bram_g_address_b_delay(0)((counter_fg+i) mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_fg+i)/ (b+1)), bram_address_width));
 						bram_g_write_b_delay(0)((counter_fg+i) mod (b+1))   <= '1';
 
-						bram_r_address_b_delay(0)((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned((counter_vr+i)/ (b+1), bram_address_width));
+						bram_r_address_b_delay(0)((counter_vr+i)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/ (b+1)), bram_address_width));
 						bram_r_write_b_delay(0)((counter_vr+i)mod (b+1))   <= '1';
 					end loop;
 					
-					
+
 					counter_fg <= counter_fg  + extra;
 					counter_vr <= counter_vr  + extra;
 					if counter_fg + extra >= p+1 then
@@ -390,7 +352,8 @@ end if;
 						state_r3_reciprocal <= multiply_state_read;
 					end if;
 
-
+						--shifting logic on batched ram needs to take into account that for b out of b+1 elements the address doesn't change, only the bram index changes,
+					--instead for the final one the address changes because we have wraparound
 					if counter = loop_limit then
 							bram_shift_v_write_b <= (others => '0');
 						else
@@ -402,12 +365,12 @@ end if;
 							else
 								if counter_vr > extra then
 									for i in 0 to extra - 1 loop
-										bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(((counter_vr)/(b+1))-2, bram_address_width));
+										bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/(b+1)), bram_address_width));
 										bram_shift_v_data_in_b((i+1)mod (b+1)) <= bram_v_data_out_a(i);
 										bram_shift_v_write_b((i+1)mod (b+1))  <= '1';
 									end loop;
 									if extra = b+1 then
-										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(((counter_vr)/(b+1))-1, bram_address_width));
+										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(integer((counter_vr+b)/(b+1))+1, bram_address_width));
 									end if;
 								end if;
 							end if;
@@ -441,14 +404,11 @@ end if;
 					state_r3_reciprocal <= output_data;
 					
 				when output_data =>
-				    extra := b + 1 - (p+1) mod (b+1);
-
+				    
+						-- outputs one coefficient at a time moving across brams
 					
-					bram_v_address_a((p - counter_vr) mod (b+1)) <= std_logic_vector(to_signed(((p - 1 - counter_vr)/(b+1)), bram_address_width + 1)(bram_address_width - 1 downto 0));
+					bram_v_address_a((p - counter_vr) mod (b+1)) <= std_logic_vector(to_signed(integer((p - 1 - counter_vr)/(b+1)), bram_address_width + 1)(bram_address_width - 1 downto 0));
 					
-					report "OUTPUT: Block=" & integer'image( (p - counter_vr) mod (b+1)) &
-       " Addr=" & integer'image(to_integer(unsigned(bram_v_address_a((p - counter_vr) mod (b+1))))) &
-       " Value=" & integer'image(to_integer(signed(bram_v_data_out_a((p - counter_vr) mod (b+1)))));
 					counter_vr           <= counter_vr + 1;
 					
 					output_valid_pipe(0) <= '1';
@@ -517,7 +477,8 @@ end if;
 
 	-- Delay the write to g bram to wait for freeze pipeline to complete.
 	-- Also shifts the address by one to implement the shift of g
-
+			--shifting logic on batched ram needs to take into account that for b out of b+1 elements the address doesn't change, only the bram index changes,
+			--instead for the first one the address changes because we have wraparound
 	delay_bram_g_port_b : process(clock, reset)
 	begin
 		if reset = '1' then
@@ -591,7 +552,7 @@ end if;
 		bram_f_data_in_b(i) <= (others => '0') when state_r3_reciprocal /= reset_ram and state_r3_reciprocal /= reset_ram_end else bram_f_data_in_b_reset(i);
 
 		bram_g_data_in_b(i) <= bram_g_data_in_b_reset(i) when (state_r3_reciprocal = reset_ram or state_r3_reciprocal = reset_ram_end) 
-			else std_logic_vector(fg_freeze(i)) when (bram_g_address_b_delay(pipeline_length)(i) /= std_logic_vector(to_unsigned(p/(b+1), bram_address_width)))
+			else std_logic_vector(fg_freeze(i)) when (bram_g_address_b_delay(pipeline_length)(i) /= std_logic_vector(to_unsigned(integer(p/(b+1)), bram_address_width)))
 			else (others => '0');
 		
 		bram_v_data_in_b(i) <= bram_shift_v_data_in_b(i) when state_r3_reciprocal /= reset_ram and state_r3_reciprocal /= reset_ram_end else bram_v_data_in_b_reset(i);

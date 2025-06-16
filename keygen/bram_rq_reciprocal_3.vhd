@@ -8,7 +8,8 @@ use ieee.math_real.all;
 -- contains of the memories for the reciprocal calculation of rq polynomials
 entity bram_rq_reciprocal_3 is
 	generic(
-		bram_address_width : integer := integer(ceil(log2(real(p + 1))));
+		
+		bram_address_width : integer := integer(ceil(log2(real((p + 1)/(4+1)))));
 		bram_data_width : integer := q_num_bits
 	);
 	port(
