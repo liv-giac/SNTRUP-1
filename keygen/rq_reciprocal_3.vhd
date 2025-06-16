@@ -318,12 +318,15 @@ begin
 						else
 							if counter_vr > extra then
 								for i in 0 to extra-1 loop
-								bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/(b+1)), bram_address_width));
+								bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/(b+1))-2, bram_address_width));
 								bram_shift_v_data_in_b((i+1)mod (b+1)) <= bram_v_data_out_a(i);
 								bram_shift_v_write_b((i+1)mod (b+1))   <= '1';
 								end loop;
-								if extra = b+1 then
-										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(integer((counter_vr+b)/(b+1))+1, bram_address_width));
+								bram_shift_v_write_b(0)  <= '0';
+									if extra = b+1 then
+										bram_shift_v_data_in_b(0) <= bram_v_data_out_a(b);
+										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(integer((counter_vr+b)/(b+1))-1, bram_address_width));
+										bram_shift_v_write_b(0)  <= '1';
 									end if;
 							end if;
 						end if;

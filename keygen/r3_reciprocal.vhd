@@ -190,6 +190,8 @@ begin
 				when reset_ram =>  ---still saves one coefficient at a time but in banked logic
 					extra := b + 1 - (p+1) mod (b+1);
 					---added a reset since this time it's not the same bram being written to every iteration, but every b + 1 times
+
+
 					bram_f_write_b_reset <= (others => '0');
 					bram_g_write_b_reset <= (others => '0');
 					bram_v_write_b_reset <= (others => '0');
@@ -237,7 +239,8 @@ begin
 					bram_v_write_b_reset(counter_vr mod (b+1)) <= '1';
 					bram_r_write_b_reset(counter_vr mod (b+1)) <= '1';
 					
-					
+
+
 
 
 
@@ -268,7 +271,6 @@ begin
 
 				when running_state =>
 				
-	
 					if counter >= loop_limit then
 						state_r3_reciprocal <= calc_reciprocal_init;
 					else
@@ -364,19 +366,28 @@ begin
 								bram_shift_v_write_b(0)    <= '1';	
 							else
 								if counter_vr > extra then
+									
+
 									for i in 0 to extra - 1 loop
-										bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/(b+1)), bram_address_width));
+										bram_shift_v_address_b((i+1)mod (b+1)) <= std_logic_vector(to_unsigned(integer((counter_vr+i)/(b+1))-2, bram_address_width));
 										bram_shift_v_data_in_b((i+1)mod (b+1)) <= bram_v_data_out_a(i);
 										bram_shift_v_write_b((i+1)mod (b+1))  <= '1';
+										
 									end loop;
+									bram_shift_v_write_b(0)  <= '0';
 									if extra = b+1 then
-										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(integer((counter_vr+b)/(b+1))+1, bram_address_width));
+										bram_shift_v_data_in_b(0) <= bram_v_data_out_a(b);
+										bram_shift_v_address_b(0) <= std_logic_vector(to_unsigned(integer((counter_vr+b)/(b+1))-1, bram_address_width));
+										bram_shift_v_write_b(0)  <= '1';
+									
+										
 									end if;
+										
 								end if;
 							end if;
 					end if;
 					
-
+								
 				when multiply_final_state_1 =>
 					bram_g_write_b_delay(0) <= (others => '0');
 					bram_r_write_b_delay(0) <= (others => '0');
@@ -407,8 +418,7 @@ begin
 				    
 						-- outputs one coefficient at a time moving across brams
 					
-					bram_v_address_a((p - counter_vr) mod (b+1)) <= std_logic_vector(to_signed(integer((p - 1 - counter_vr)/(b+1)), bram_address_width + 1)(bram_address_width - 1 downto 0));
-					
+					bram_v_address_a((p - counter_vr-1) mod (b+1)) <= std_logic_vector(to_signed(integer((p - 1 - counter_vr)/(b+1)), bram_address_width + 1)(bram_address_width - 1 downto 0));
 					counter_vr           <= counter_vr + 1;
 					
 					output_valid_pipe(0) <= '1';
@@ -433,7 +443,7 @@ begin
 
 
 
-
+						--makes sure to get the right bram index out
 	output_freeze <= "00" when reciprocal_output = "00" or bram_v_data_out_a((p -1 - counter_vr) mod (b+1)) = "00"
 		else "01" when (reciprocal_output = "01" and bram_v_data_out_a((p - 1 -counter_vr) mod (b+1)) = "01") or (reciprocal_output = "11" and bram_v_data_out_a((p - counter_vr) mod (b+1)) = "11")
 		else "11" when (reciprocal_output = "11" and bram_v_data_out_a((p - 1 - counter_vr) mod (b+1)) = "01") or (reciprocal_output = "01" and bram_v_data_out_a((p - counter_vr) mod (b+1)) = "11")
